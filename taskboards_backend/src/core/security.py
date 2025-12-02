@@ -42,6 +42,9 @@ def create_access_token(subject: str | int, expires_minutes: Optional[int] = Non
         Encoded JWT token string.
     """
     settings = get_settings()
+    if not settings.SECRET_KEY:
+        # Avoid startup crash; provide runtime guidance on missing configuration
+        raise RuntimeError("SECRET_KEY not configured. Set SECRET_KEY in environment to enable authentication.")
     expire_delta = timedelta(minutes=expires_minutes if expires_minutes is not None else settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     expire = datetime.now(timezone.utc) + expire_delta
     to_encode: Dict[str, Any] = {"sub": str(subject), "exp": expire}
@@ -60,5 +63,7 @@ def decode_token(token: str) -> Dict[str, Any]:
         JWTError on invalid or expired tokens.
     """
     settings = get_settings()
+    if not settings.SECRET_KEY:
+        raise RuntimeError("SECRET_KEY not configured. Set SECRET_KEY in environment to enable authentication.")
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
     return payload

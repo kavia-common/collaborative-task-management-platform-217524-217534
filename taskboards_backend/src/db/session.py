@@ -49,10 +49,11 @@ def _init_engine_and_session() -> None:
     )
 
 
+# PUBLIC_INTERFACE
 def is_db_configured() -> bool:
     """
-    PUBLIC_INTERFACE
     Return True if DATABASE_URL is present and the engine/session can be initialized.
+    Note: This does not attempt to connect to the DB, only checks configuration presence.
     """
     if _get_database_url():
         # Try initializing if not already
@@ -74,19 +75,18 @@ def get_db() -> Generator[Session, None, None]:
     """
     Yield a SQLAlchemy session for FastAPI dependency injection and ensure cleanup.
 
-    If the database is not configured (missing env DATABASE_URL), this function
-    will raise a 503 HTTPException from the caller context by importing lazily
-    to avoid import-time failures.
+    Behavior when DB is not configured:
+    - If called within FastAPI request context, raises HTTP 503 so routes respond gracefully.
+    - If used outside FastAPI (e.g., scripts), raises RuntimeError with guidance.
     """
-    # Local import to avoid FastAPI/Starlette dependency in DB layer for core types
+    # Import lazily to avoid import-time dependency on FastAPI
     try:
         from fastapi import HTTPException, status
     except Exception:
-        # If FastAPI is not available in this call context, raise a RuntimeError
-        # to indicate mis-usage outside request cycle.
+        # Not in a FastAPI runtime (or FastAPI unavailable): raise descriptive error if unconfigured
         if not is_db_configured():
             raise RuntimeError(
-                "Database not configured. Set DATABASE_URL. See .env.example"
+                "Database not configured. Set DATABASE_URL. See .env.example and taskboards_backend/SETUP_DB.md"
             )
         SessionLocal = get_sessionmaker()
         assert SessionLocal is not None
@@ -98,7 +98,6 @@ def get_db() -> Generator[Session, None, None]:
         return
 
     if not is_db_configured():
-        # Raise within request context so routes return 503 gracefully
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database not configured. Set DATABASE_URL. See .env.example",

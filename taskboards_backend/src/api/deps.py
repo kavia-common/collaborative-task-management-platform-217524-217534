@@ -19,6 +19,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
 
     Raises:
         HTTPException 401 if token invalid or user not found.
+        HTTPException 503 if SECRET_KEY is not configured.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -30,6 +31,12 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         sub = payload.get("sub")
         if sub is None:
             raise credentials_exception
+    except RuntimeError as e:
+        # Likely SECRET_KEY not configured
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e),
+        )
     except Exception:
         raise credentials_exception
     user: Optional[User] = db.query(User).filter(User.id == int(sub)).first()
