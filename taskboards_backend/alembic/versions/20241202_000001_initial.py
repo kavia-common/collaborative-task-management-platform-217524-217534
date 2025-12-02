@@ -107,13 +107,14 @@ def upgrade() -> None:
     op.create_index("ix_assignment_task", "assignments", ["task_id"])
 
     # activities
+    # Note: DB column is 'metadata'; ORM maps it as Activity.meta_json to avoid SQLAlchemy reserved attribute 'metadata'.
     op.create_table(
         "activities",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("task_id", sa.Integer(), sa.ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False),
         sa.Column("actor_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("action", sa.String(length=100), nullable=False),
-        sa.Column("metadata", sa.Text(), nullable=True),
+        sa.Column("metadata", sa.Text(), nullable=True),  # mapped to meta_json in ORM
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
     )
     op.create_index("ix_activity_task", "activities", ["task_id"])

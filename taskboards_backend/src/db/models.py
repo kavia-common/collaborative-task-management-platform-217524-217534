@@ -186,7 +186,8 @@ class Activity(Base):
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
     actor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
-    metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 'metadata' is reserved in SQLAlchemy Declarative; use a safe name.
+    meta_json: Mapped[Optional[str]] = mapped_column("metadata", Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     task: Mapped["Task"] = relationship("Task", back_populates="activities")

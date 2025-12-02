@@ -151,7 +151,7 @@ class AssignmentOut(BaseModel):
 class ActivityCreate(BaseModel):
     task_id: int = Field(..., description="Task identifier")
     action: str = Field(..., max_length=100, description="Type of action")
-    metadata: Optional[str] = Field(None, description="Optional metadata JSON")
+    meta_json: Optional[str] = Field(None, description="Optional metadata JSON")
 
 
 class ActivityOut(BaseModel):
@@ -159,7 +159,7 @@ class ActivityOut(BaseModel):
     task_id: int = Field(..., description="Task identifier")
     actor_id: int = Field(..., description="Actor (user) identifier")
     action: str = Field(..., description="Type of action")
-    metadata: Optional[str] = Field(None, description="Optional metadata JSON")
+    meta_json: Optional[str] = Field(None, description="Optional metadata JSON")
     created_at: datetime = Field(..., description="Timestamp")
 
     class Config:
