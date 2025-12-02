@@ -1,5 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.api.routes.auth import router as auth_router
 from src.api.routes.projects import router as projects_router
@@ -9,6 +10,7 @@ from src.api.routes.tags import router as tags_router
 from src.api.routes.export import router as export_router
 from src.core.config import get_settings
 from src.realtime.manager import ConnectionManager
+from src.db.session import is_db_configured
 
 openapi_tags = [
     {"name": "health", "description": "Service health and diagnostics"},
@@ -44,6 +46,23 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def _startup_check() -> None:
+    """
+    Startup diagnostics. Warn if DATABASE_URL is missing rather than crashing.
+    """
+    try:
+        if not is_db_configured():
+            # Log a warning; app still starts so health endpoint works
+            app.logger and app.logger.warning(
+                "DATABASE_URL not configured. DB-backed endpoints will return 503 until configured. "
+                "See .env.example and SETUP_DB.md"
+            )
+    except Exception:
+        # Do not block startup for any reason
+        pass
+
+
 @app.get("/", tags=["health"], summary="Health Check")
 def health_check():
     """
@@ -53,6 +72,17 @@ def health_check():
         JSON payload indicating service health.
     """
     return {"message": "Healthy"}
+
+
+@app.get("/status", tags=["health"], summary="Runtime status")
+def runtime_status():
+    """
+    Report runtime configuration status.
+
+    Returns:
+        JSON with dbConfigured: true|false so frontends can drive onboarding.
+    """
+    return JSONResponse({"dbConfigured": bool(is_db_configured())})
 
 
 # Include API routers
