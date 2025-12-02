@@ -1,6 +1,9 @@
+from typing import List
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from src.api.routes.auth import router as auth_router
 from src.api.routes.projects import router as projects_router
@@ -9,6 +12,12 @@ from src.api.routes.tasks import router as tasks_router
 from src.api.routes.tags import router as tags_router
 from src.api.routes.export import router as export_router
 from src.core.config import get_settings
+from src.core.diagnostics import (
+    attach_request_logging_middleware,
+    build_status_payload,
+    log_event,
+    make_logger,
+)
 from src.realtime.manager import ConnectionManager
 from src.db.session import is_db_configured
 
@@ -32,18 +41,23 @@ app = FastAPI(
     openapi_tags=openapi_tags,
 )
 
-# Load settings to validate env and to get CORS
+# Load settings and logger
 settings = get_settings()
+app_logger = make_logger("taskboards.app")
 
-# CORS using settings
-allow_origins = settings.CORS_ALLOW_ORIGINS or ["*"]
+# CORS using settings (improved parsing is handled in settings)
+allow_origins: List[str] = settings.CORS_ALLOW_ORIGINS or ["*"]
+log_event(app_logger, "cors_configuration", allow_origins=allow_origins)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins if allow_origins != [""] else ["*"],
+    allow_origins=allow_origins if allow_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Lightweight request logging middleware
+app.middleware("http")(attach_request_logging_middleware(app_logger))
 
 
 @app.on_event("startup")
@@ -53,17 +67,17 @@ def _startup_check() -> None:
     """
     try:
         if not is_db_configured():
-            # Log a warning; app still starts so health endpoint works
-            app.logger and app.logger.warning(
-                "DATABASE_URL not configured. DB-backed endpoints will return 503 until configured. "
-                "See .env.example and SETUP_DB.md"
+            log_event(
+                app_logger,
+                "db_unconfigured",
+                message="DATABASE_URL not configured. DB-backed endpoints will return 503 until configured.",
             )
     except Exception:
         # Do not block startup for any reason
         pass
 
 
-@app.get("/", tags=["health"], summary="Health Check")
+@app.get("/", tags=["health"], summary="Health Check", description="Simple health check endpoint.")
 def health_check():
     """
     Health check endpoint.
@@ -74,15 +88,50 @@ def health_check():
     return {"message": "Healthy"}
 
 
-@app.get("/status", tags=["health"], summary="Runtime status")
+class StatusResponse(BaseModel):
+    app_version: str = Field(..., description="Application version")
+    db_configured: bool = Field(..., description="True if DATABASE_URL is present")
+    secret_key_configured: bool = Field(..., description="True if SECRET_KEY is present")
+    cors_origins: List[str] = Field(..., description="Effective CORS allow origins")
+    websocket_origins: List[str] = Field(..., description="Effective WebSocket allow origins")
+    uptime_seconds: int = Field(..., description="Seconds since process start")
+    warnings: List[str] = Field(default_factory=list, description="Non-fatal startup/runtime warnings")
+
+
+@app.get(
+    "/status",
+    tags=["health"],
+    summary="Runtime status",
+    description=(
+        "Report runtime configuration status including app version, DB and secret key presence, "
+        "effective CORS/WebSocket origins, uptime, and warnings. This endpoint never requires DB."
+    ),
+    response_model=StatusResponse,
+    responses={
+        200: {"description": "Current runtime status"},
+    },
+)
 def runtime_status():
     """
-    Report runtime configuration status.
+    Return runtime configuration and diagnostics.
 
     Returns:
-        JSON with dbConfigured: true|false so frontends can drive onboarding.
+        StatusResponse JSON with fields suitable for frontend onboarding.
     """
-    return JSONResponse({"dbConfigured": bool(is_db_configured())})
+    warnings: List[str] = []
+    if not is_db_configured():
+        warnings.append("DATABASE_URL is not configured. DB-backed routes will return 503.")
+    if not settings.SECRET_KEY:
+        warnings.append("SECRET_KEY is not configured. Auth routes will return 503.")
+    payload = build_status_payload(
+        app_version=app.version,
+        db_configured=is_db_configured(),
+        secret_key_configured=bool(settings.SECRET_KEY),
+        cors_origins=settings.CORS_ALLOW_ORIGINS or ["*"],
+        websocket_origins=getattr(settings, "WEBSOCKET_ORIGINS", settings.CORS_ALLOW_ORIGINS) or ["*"],
+        warnings=warnings,
+    )
+    return JSONResponse(payload)
 
 
 # Include API routers

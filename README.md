@@ -9,4 +9,12 @@ Backend quick start:
 
 Health endpoints:
 - GET /          -> {"message":"Healthy"}
-- GET /status    -> {"dbConfigured": true|false}
+- GET /status    -> {
+    "app_version": "0.1.0",
+    "db_configured": true|false,
+    "secret_key_configured": true|false,
+    "cors_origins": ["*"] or ["http://localhost:3000", ...],
+    "websocket_origins": [...],
+    "uptime_seconds": <int>,
+    "warnings": [ ... ]
+  }

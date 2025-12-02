@@ -75,8 +75,20 @@ Health endpoint:
 Status endpoint:
   GET /status -> {"dbConfigured": true|false}
 
-When `dbConfigured` is false, DB-backed endpoints will return 503 with message:
-  "Database not configured. Set DATABASE_URL. See .env.example"
+When `dbConfigured` is false, DB-backed endpoints will return 503 with structured JSON:
+
+{
+  "error": "service_unavailable",
+  "message": "Database not configured. Set DATABASE_URL. See .env.example and SETUP_DB.md",
+  "action_hints": [
+    "Set DATABASE_URL environment variable to a valid SQLAlchemy URL.",
+    "See taskboards_backend/SETUP_DB.md for instructions.",
+    "After setting DATABASE_URL, run Alembic migrations: alembic upgrade head",
+    "Restart the backend service after configuration."
+  ]
+}
+
+The `/status` endpoint returns expanded diagnostics including app_version, cors/websocket origins, uptime_seconds, and warnings to aid onboarding.
 
 ## 5. Troubleshooting
 

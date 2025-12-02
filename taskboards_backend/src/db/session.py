@@ -5,6 +5,8 @@ from typing import Generator, Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
+from src.core.diagnostics import db_unavailable_response
+
 # Create the declarative base for models
 Base = declarative_base()
 
@@ -76,12 +78,12 @@ def get_db() -> Generator[Session, None, None]:
     Yield a SQLAlchemy session for FastAPI dependency injection and ensure cleanup.
 
     Behavior when DB is not configured:
-    - If called within FastAPI request context, raises HTTP 503 so routes respond gracefully.
+    - If called within FastAPI request context, returns a structured HTTP 503 JSON with action hints.
     - If used outside FastAPI (e.g., scripts), raises RuntimeError with guidance.
     """
     # Import lazily to avoid import-time dependency on FastAPI
     try:
-        from fastapi import HTTPException, status
+        from fastapi import HTTPException
     except Exception:
         # Not in a FastAPI runtime (or FastAPI unavailable): raise descriptive error if unconfigured
         if not is_db_configured():
@@ -98,10 +100,9 @@ def get_db() -> Generator[Session, None, None]:
         return
 
     if not is_db_configured():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not configured. Set DATABASE_URL. See .env.example",
-        )
+        # Raise an HTTPException with a Response carrying our structured body
+        response = db_unavailable_response()
+        raise HTTPException(status_code=response.status_code, detail=response.body.decode("utf-8"))
 
     SessionLocal = get_sessionmaker()
     assert SessionLocal is not None
