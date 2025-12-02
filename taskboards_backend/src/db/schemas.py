@@ -151,6 +151,7 @@ class AssignmentOut(BaseModel):
 class ActivityCreate(BaseModel):
     task_id: int = Field(..., description="Task identifier")
     action: str = Field(..., max_length=100, description="Type of action")
+    # Note: This maps to DB column 'metadata' via ORM attribute Activity.meta_json
     meta_json: Optional[str] = Field(None, description="Optional metadata JSON")
 
 
@@ -159,6 +160,7 @@ class ActivityOut(BaseModel):
     task_id: int = Field(..., description="Task identifier")
     actor_id: int = Field(..., description="Actor (user) identifier")
     action: str = Field(..., description="Type of action")
+    # Note: Exposes ORM attribute 'meta_json' which maps to DB 'metadata'
     meta_json: Optional[str] = Field(None, description="Optional metadata JSON")
     created_at: datetime = Field(..., description="Timestamp")
 

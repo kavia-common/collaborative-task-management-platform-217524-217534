@@ -181,12 +181,21 @@ class Assignment(Base):
 
 class Activity(Base):
     __tablename__ = "activities"
+    """
+    ORM for the activities audit log.
+
+    Important:
+    - Do NOT define an attribute named 'metadata' on this class. SQLAlchemy's DeclarativeBase
+      already defines 'metadata' on the Base; using it on models will cause attribute conflicts.
+    - We map the database column named 'metadata' to the Python attribute 'meta_json' using
+      mapped_column("metadata", ...).
+    """
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
     actor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
-    # 'metadata' is reserved in SQLAlchemy Declarative; use a safe name.
+    # Map DB column 'metadata' to safe Python attribute 'meta_json' to avoid reserved name collision.
     meta_json: Mapped[Optional[str]] = mapped_column("metadata", Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
